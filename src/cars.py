@@ -24,8 +24,7 @@ import glob
 # ----------------------------------------------------------------
 
 def scale_down(img, max_x, max_y):
-    blurred = img.copy()
-    cv2.GaussianBlur(img, (3,3), .5, blurred)
+    blurred = cv2.GaussianBlur(img, (3,3), .5)
     height, width, depth = img.shape
     small = None
     if width>height:
