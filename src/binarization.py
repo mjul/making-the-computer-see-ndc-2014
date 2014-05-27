@@ -66,7 +66,7 @@ def interactive_adaptive_threshold(img):
     def update_callback(*arg):
         block_size = cv2.getTrackbarPos('Block size', ADAPTIVE_THRESHOLD_WINDOW) + 3
         block_size |= 1 # must be odd
-        c = cv2.getTrackbarPos('C', ADAPTIVE_THRESHOLD_WINDOW) - 200
+        c = cv2.getTrackbarPos('C', ADAPTIVE_THRESHOLD_WINDOW) - 100
         brightest = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, block_size, c)
         coloured = cv2.cvtColor(brightest, cv2.COLOR_GRAY2BGR)
         put_text(coloured, 'Block size = %d' % block_size, (0,50))
@@ -74,7 +74,7 @@ def interactive_adaptive_threshold(img):
         cv2.imshow(ADAPTIVE_THRESHOLD_WINDOW, coloured)
         pass
     cv2.createTrackbar('Block size', ADAPTIVE_THRESHOLD_WINDOW, 5-3, 100, update_callback)
-    cv2.createTrackbar('C', ADAPTIVE_THRESHOLD_WINDOW, 205, 400, update_callback)
+    cv2.createTrackbar('C', ADAPTIVE_THRESHOLD_WINDOW, 105, 200, update_callback)
     update_callback()
 
 # ----------------------------------------------------------------
@@ -141,6 +141,7 @@ if  __name__ =='__main__':
 
     adaptive = adaptive_threshold(small)
     cv2.imshow('Adaptive', adaptive)
-        
+
+    print "Press any key..."
     cv2.waitKey()
     cv2.destroyAllWindows()
