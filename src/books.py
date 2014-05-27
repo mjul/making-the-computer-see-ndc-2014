@@ -75,7 +75,10 @@ def find_quadrilaterals(img, min_area, cos_epsilon):
 def show(title, img):
     '''Show the image.
        As a side-effect saves the image for use in the presentation.'''
-    cv2.imshow(title, img)
+    h,w = img.shape[:2]
+    scale_factor = 640.0 / h
+    small = cv2.resize(img, (int(scale_factor*w), int(scale_factor*h)))
+    cv2.imshow(title, small)
     fname = "../screenshots/books %s.jpg" % title.replace(':', '')
     if SAVE_SCREENSHOTS:
         print "Writing %s..." % fname
@@ -111,25 +114,75 @@ def create_mask(img, cnt):
     return mask
 
 
+# ----------------------------------------------------------------
+
 def binarize_adaptive(img, mask):
     '''Convert an image to binary form using adaptive thresholding,
        restricting to only the mask area (where the mask is non-zero).'''
     gray_full = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray_masked = cv2.bitwise_and(gray_full, gray, mask=mask)
+    gray_masked = cv2.bitwise_and(gray_full, gray_full, mask=mask)
     
-    binarized = cv2.adaptiveThreshold(gray_masked, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,
-                                      blockSize=3, C=5)
+    binarized = cv2.adaptiveThreshold(gray_masked, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,
+                                      blockSize=7, C=8)
     return binarized
 
  
 # ----------------------------------------------------------------
 
+def transform_perspective(img, source_quad, dsize):
+    '''
+    Transform the perspective so the selected quadrilateral is mapped to a rectangle.
+    This maps image regions to how they would have looked photographed straight on.
+    '''
+    points_by_x = sorted([tuple(pt) for pt in source_quad])
+    leftmost = points_by_x[0:2:1]
+    rightmost = points_by_x[2:4:1]
+    top_left, bottom_left = sorted(leftmost, key=lambda pt: pt[1])
+    top_right, bottom_right = sorted(rightmost, key=lambda pt: pt[1])
+    corners = np.array([top_left, top_right, bottom_right, bottom_left]).astype('float32')
+    width, height = dsize
+    target = np.array([(0,0), (width,0), (width, height), (0,height)]).astype('float32')
+    mpt = cv2.getPerspectiveTransform(corners, target)
+    return cv2.warpPerspective(img, mpt, (width, height), flags=cv2.INTER_CUBIC)
+
+# ----------------------------------------------------------------
+
+def ocr_text(img):
+    '''Perform OCR on the image.'''
+    tr = Tesseract(lang='eng')
+    tr.clear()
+    pil_image = pil.Image.fromarray(img)
+    tr.set_image(pil_image)
+    utf8_text = tr.get_text()
+    return utf8_text
+        
+# ----------------------------------------------------------------
+
+def clip_contour(img, contour):
+    '''Return the maximum rectangular subset of the image
+       that fits inside the contour.'''
+    xs = sorted([xy[0] for xy in contour])
+    ys = sorted([xy[1] for xy in contour])
+
+    # clip to the largest inside rectangle
+    contour = np.array([[xs[1], ys[1]], [xs[2], ys[1]],
+                        [xs[2], ys[2]], [xs[1], ys[2]]])
+
+    x1, x2 = xs[1], xs[2]
+    y1, y2 = ys[1] + 200, ys[2] - 100
+    w = x2 - x1
+    h = y2 - y1
+    
+    page_clipped = raw[y1:y2, x1:x2, :]
+    return page_clipped
+
+# ----------------------------------------------------------------
+
 if  __name__ =='__main__':
-    raw = cv2.imread('../images/books/Microserfs_p87_2.jpg')
+    raw = cv2.imread('../images/books/Microserfs_p87_1.jpg')
 
     SAVE_SCREENSHOTS = True
     scale_factor = raw.shape[0] / 640    # .shape is (height, width, depth)
-    print raw.shape
     
     # Work on a small image for speed and better screen-size fit while developing
     blurred = cv2.GaussianBlur(raw, (3,3), 0)
@@ -141,20 +194,25 @@ if  __name__ =='__main__':
     # Go back to full resolution to get full fidelity text for OCR
     page_contour = scale_factor * page_contour_small
     page_mask = create_mask(raw, page_contour)
-    # Get the interior of the page, not the edges
-    # (erode grows the black, non-page area)
 
     # This includes the page border
     binarized = binarize_adaptive(raw, page_mask)
-    
+        
+    # Get the interior of the page, not the edges
+
     # Make the non-interior part of the page white
-    interior_mask = cv2.erode(page_mask, kernel=None, iterations=40)
+    # (erode grows the black, non-page area)
+    interior_mask = cv2.erode(page_mask, kernel=(3,3), iterations=40)
     not_interior = cv2.bitwise_not(interior_mask)
     clipped_binarized = cv2.max(binarized, not_interior)
-    gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
-    clipped = cv2.max(gray, not_interior)
-
     show('6: Binarized', clipped_binarized)
+    
+    # Send high-definition image to Tesseract OCR
+    # (it will binarize etc.)
+    inner_rect = clip_contour(raw, page_contour)
+    show('7: OCR region', inner_rect)
+    print "OCR..."
+    print ocr_text(inner_rect)
     
     print "Press any key..."
     cv2.waitKey()
