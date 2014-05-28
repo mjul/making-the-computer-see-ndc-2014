@@ -453,9 +453,9 @@ def plot_image_variants_and_matches(image_variants, image_matches):
             rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
         else:
             rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    plt.imshow(rgb)
-    plt.axis('off')
-    plt.title(plate if plate else "(No plate)")
+        plt.imshow(rgb)
+        plt.axis('off')
+        plt.title(plate if plate else "(No plate)")
     plt.show(block=False)
 
 # ----------------------------------------------------------------
@@ -573,11 +573,12 @@ if  __name__ =='__main__':
     small = scale_down(raw, 640, 480)
 
     print "match_plates_for_file..."
-    #match_plates_for_file('../images/cars/car_XJ41721.jpg')
-    match_all_plates()
+    match_plates_for_file('../images/cars/car_XJ41721.jpg')
+    #match_all_plates()
     #match_plates_for_file('../images/cars/car_AC46749.jpg')
     
     print "Press any key..."
     cv2.waitKey()
     cv2.destroyAllWindows()
+    plt.close('all')
 
