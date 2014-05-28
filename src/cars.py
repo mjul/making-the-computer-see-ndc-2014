@@ -443,23 +443,28 @@ def plate_text_image(img):
 
 def match_plates(candidate_plate_images):
     '''Returns a list of the possible matches for the plate.'''
-    print "match_plates..."
     matches = []
     n = 1
     for cp in candidate_plate_images:
-        print "   matching..."
+        # Filter to different representations
         n = n+1
         gray = cv2.cvtColor(cp, cv2.COLOR_BGR2GRAY)
         adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 15)
-        cv2.imshow('Adaptive', adaptive)
+        #cv2.imshow('Adaptive', adaptive)
         ret_val, th = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
-        cv2.imshow('Thresh', th)
+        #cv2.imshow('Thresh', th)
         t_otsu, th_otsu = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         ret_val, th_otsu = cv2.threshold(gray, t_otsu, 255, cv2.THRESH_BINARY)
-        cv2.imshow('OTSU', th_otsu)
+        #cv2.imshow('OTSU', th_otsu)
+        # thin the black letters
+        dilated = cv2.dilate(th_otsu, kernel=(5,5), iterations=2)
+        # thicken the letters
+        eroded = cv2.erode(dilated, None)
+        #cv2.imshow('Dilated', dilated)
+        #cv2.imshow('Eroded', eroded)
         #ptx = plate_text_image(cp)
         #cv2.imshow('ptx', ptx)
-        image_variants = [cp, adaptive, th, th_otsu]
+        image_variants = [cp, adaptive, th, th_otsu, dilated, eroded]
         matches += [m for m in map(ocr_plate, image_variants) if m]
     return matches
 
@@ -488,8 +493,9 @@ def match_plates_for_file(f):
     if len(matches) > 0:
         best = collections.Counter(matches).most_common(1)[0][0]
     
-    # cv2.destroyWindow(window_name)
-    print "FILE: %40s : %10s" % (f, plate), best
+    cv2.destroyWindow(window_name)
+    is_match = "OK" if (best == plate) else "-"
+    print "FILE: %40s : %10s   %s" % (f, plate, is_match)
     
 def match_all_plates():
     for f in find_car_image_files():
@@ -521,33 +527,36 @@ def match_all_plates():
 
 # ----------------------------------------------------------------
 
+# Note: this is not very good...
+def match_plates_simple(img):
+    '''Find and match the plates on an image using simple thresholding algorithms.'''
+    rects = find_plate_shaped_rectangles(small)
+    cv2.imshow('Plate candidates', draw_contours(small, rects))
+    candidate_plate_images = [transform_perspective(small, r, (500, 100)) for r in rects]
+    for cp in candidate_plate_images:
+        gray = cv2.cvtColor(cp, cv2.COLOR_BGR2GRAY)
+        bw = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 15)
+        ret_val, th = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
+        print "MATCHED cp:", ocr_plate(cp)
+        print "MATCHED bw:", ocr_plate(bw)
+        print "MATCHED th:", ocr_plate(th)
+        print "-------------------------------"
 
-
+# ----------------------------------------------------------------
 
 if  __name__ =='__main__':
-    raw = cv2.imread('../images/cars/car_AC46749.jpg')
-    #raw = cv2.imread('../images/cars/car_AK62419.jpg')
+    #raw = cv2.imread('../images/cars/car_AC46749.jpg')
+    raw = cv2.imread('../images/cars/car_AK62419.jpg')
     #raw = cv2.imread('../images/cars/car_angle_BF27429.jpg')
+    #raw = cv2.imread('../images/cars/car_XJ41721.jpg')
     small = scale_down(raw, 640, 480)
 
- 
-    #cv2.imshow('Plate candidates', draw_plate_shaped_rectangles(small))
-    #rects = find_plate_shaped_rectangles(small)
-    #candidate_plate_images = [transform_perspective(small, r, (500, 100)) for r in rects]
-    #for cp in candidate_plate_images:
-    #    gray = cv2.cvtColor(cp, cv2.COLOR_BGR2GRAY)
-    #    bw = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 69, -50)
-    #    ret_val, th = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
-    #    print "MATCHED cp:", ocr_plate(cp)
-    #    print "MATCHED bw:", ocr_plate(bw)
-    #    print "MATCHED th:", ocr_plate(th)
-    #    print "-------------------------------"
-
-    match_plates_for_file('../images/cars/car_XJ41721.jpg')
-    #match_all_plates()
+    print "match_plates_for_file..."
+    #match_plates_for_file('../images/cars/car_XJ41721.jpg')
+    match_all_plates()
     #match_plates_for_file('../images/cars/car_AC46749.jpg')
     
-    #print "Press any key..."
-    #cv2.waitKey()
-    #cv2.destroyAllWindows()
+    print "Press any key..."
+    cv2.waitKey()
+    cv2.destroyAllWindows()
 
