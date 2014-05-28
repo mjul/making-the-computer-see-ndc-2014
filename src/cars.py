@@ -18,6 +18,7 @@ import PIL as pil
 # Other
 import re
 import glob
+import collections
 
 # ----------------------------------------------------------------
 # Image manipulation functions
@@ -138,9 +139,9 @@ def angle_cos(p0, p1, p2):
     return abs( np.dot(d1, d2) / np.sqrt( np.dot(d1, d1)*np.dot(d2, d2) ) )
 
 def find_rectangles(img, min_area, cos_epsilon):
-    img = cv2.GaussianBlur(img, (5, 5), 0)
+    blurred = cv2.GaussianBlur(img, (5, 5), 0)
     rectangles = []
-    for gray in cv2.split(img):
+    for gray in cv2.split(blurred):
         for thrs in xrange(0, 255, 26):
             if thrs == 0:
                 bin = cv2.Canny(gray, 0, 50, apertureSize=5)
@@ -150,12 +151,12 @@ def find_rectangles(img, min_area, cos_epsilon):
             contours, hierarchy = cv2.findContours(bin, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             for cnt in contours:
                 cnt_len = cv2.arcLength(cnt, True)
-                cnt = cv2.approxPolyDP(cnt, 0.02*cnt_len, True)
-                if len(cnt) == 4 and cv2.contourArea(cnt) > min_area and cv2.isContourConvex(cnt):
-                    cnt = cnt.reshape(-1, 2)
-                    max_cos = np.max([angle_cos( cnt[i], cnt[(i+1) % 4], cnt[(i+2) % 4] ) for i in xrange(4)])
+                poly = cv2.approxPolyDP(cnt, 0.02*cnt_len, True)
+                if len(poly) == 4 and cv2.contourArea(poly) > min_area and cv2.isContourConvex(poly):
+                    poly = poly.reshape(-1, 2)
+                    max_cos = np.max([angle_cos(poly[i], poly[(i+1) % 4], poly[(i+2) % 4] ) for i in xrange(4)])
                     if max_cos < cos_epsilon:
-                        rectangles.append(cnt)
+                        rectangles.append(poly)
     return rectangles
 
 # ----------------------------------------------------------------
@@ -277,6 +278,41 @@ def show_hsv(img):
 # Histograms
 # ----------------------------------------------------------------
 
+    # nbins = [10]
+    # hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+    # h,s,v = cv2.split(hsv)
+    
+    #histogram = cv2.calcHist([v],[0], None, nbins, [0,256])
+    #histogram = cv2.normalize(histogram, 100)
+    #show_histogram(small)
+
+    # reference = cv2.imread('/users/mjul/Downloads/1000px-DK_common_license_plate_1976.svg.png')
+    # reference = small
+    # hsv = cv2.cvtColor(reference, cv2.COLOR_BGR2HSV)
+    # h,s,v = cv2.split(hsv)
+    # ref_hist = cv2.calcHist([h],[0], None, nbins, [0,256])
+    # plt.title('HSV histograms')
+    # fig = plt.figure()
+    # for lcrt in zip((h,s,v), ['b','g','r'], (1,2,3), ('Hue', 'Saturation', 'Value')):
+    #     layer, colour, row, title = lcrt
+    #     fig.add_subplot(3,1, row)
+    #     hist = cv2.calcHist([layer], [0], None, nbins, [0 ,256])
+    #     hist = cv2.normalize(hist, 100)
+    #     plt.plot(hist)
+    # plt.show()
+    
+    #ref_hist = cv2.normalize(ref_hist, 100)
+
+    #print cv2.compareHist(histogram, ref_hist, 1)
+    #cv2.NormalizeHist(histogram, 1.0)
+    #cv2.NormalizeHist(ref_hist, 1.0)
+
+    #plt.plot(histogram, 'b')
+    #plt.plot(ref_hist, 'g')
+    #plt.xlim([0,256])
+    #plt.show()
+
+    #show_histogram(small)
 
 
 # ----------------------------------------------------------------
@@ -378,12 +414,14 @@ def ocr_text(img):
 
 def ocr_plate(img):
     text = ocr_text(img)
-    match = re.search(r"[A-Z][A-Z] \d\d \d\d\d", text)
+    match = re.search(r"[A-Z][A-Z] *\d{2} *\d{3}", text)
     result = None
     if match:
         result = match.group()
+        # Canonicalize to no spacing
+        result = result.replace(' ', '')
     return result
-        
+
 # ----------------------------------------------------------------
 
 def select_mask_area(img, mask):
@@ -399,27 +437,38 @@ def plate_text_image(img):
     whiteish_mask = cv2.inRange(img, (150,150,150), (255,255,255))
     dilated_white = cv2.dilate(whiteish_mask, kernel=None, iterations=3)
     plate_mask = cv2.bitwise_or(dilated_black, dilated_white)
-    result = select_mask_area(img, plate_mask)
+    result = cv2.max(select_mask_area(img, plate_mask), non_mask)
     cv2.imshow('plate_text_mask', np.ma.vstack((img, cv2.cvtColor(plate_mask, cv2.COLOR_GRAY2BGR), result)))
     return result
 
 def match_plates(candidate_plate_images):
+    '''Returns a list of the possible matches for the plate.'''
+    print "match_plates..."
     matches = []
     n = 1
     for cp in candidate_plate_images:
+        print "   matching..."
         n = n+1
         gray = cv2.cvtColor(cp, cv2.COLOR_BGR2GRAY)
-        adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 69, -50)
+        adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 15)
+        cv2.imshow('Adaptive', adaptive)
         ret_val, th = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
-        ptx = plate_text_image(cp)
-        matches += [m for m in map(ocr_plate, [cp, adaptive, th, ptx]) if m]
-    uniques = set(matches)
-    return [x for x in uniques]
+        cv2.imshow('Thresh', th)
+        t_otsu, th_otsu = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        ret_val, th_otsu = cv2.threshold(gray, t_otsu, 255, cv2.THRESH_BINARY)
+        cv2.imshow('OTSU', th_otsu)
+        #ptx = plate_text_image(cp)
+        #cv2.imshow('ptx', ptx)
+        image_variants = [cp, adaptive, th, th_otsu]
+        matches += [m for m in map(ocr_plate, image_variants) if m]
+    return matches
 
 def show_candidate_plates(candidate_plate_images):
     if len(candidate_plate_images) > 0:
         all_plates = np.ma.vstack(candidate_plate_images)
-        cv2.imshow('Candidates', all_plates)
+    else:
+        all_plates = np.zeros((500,100,3))
+    cv2.imshow('Candidates', all_plates)
 
 def match_plates_for_file(f):
     match = re.search(r'[A-Z]{2}\d{5}', f)
@@ -434,24 +483,23 @@ def match_plates_for_file(f):
     cv2.imshow(window_name, contours)
     candidate_plate_images = [transform_perspective(s, r, (250,50)) for r in rects]
     show_candidate_plates(candidate_plate_images)
-    uniques = match_plates(candidate_plate_images)
-    cv2.destroyWindow(window_name)
-    print "FILE: %40s : %10s" % (f, plate), uniques
+    matches = match_plates(candidate_plate_images)
+    best = "-"
+    if len(matches) > 0:
+        best = collections.Counter(matches).most_common(1)[0][0]
+    
+    # cv2.destroyWindow(window_name)
+    print "FILE: %40s : %10s" % (f, plate), best
     
 def match_all_plates():
     for f in find_car_image_files():
-        match_plates_for_file(f)
+        # Danish car images only
+        if re.search(r"car_[A-Z][A-Z]\d\d\d\d\d.jpg", f):
+            match_plates_for_file(f)
 
 # ----------------------------------------------------------------
 
-
-if  __name__ =='__main__':
-    raw = cv2.imread('../images/cars/car_AC46749.jpg')
-    #raw = cv2.imread('../images/cars/car_AK62419.jpg')
-    #raw = cv2.imread('../images/cars/car_angle_BF27429.jpg')
-    small = scale_down(raw, 640, 480)
-
-    # Get the whiteish parts by hue and value filtering and erode/dilate
+   # Get the whiteish parts by hue and value filtering and erode/dilate
     #whiteish = whiteish_areas(small)
     #cv2.imshow('Whiteish', whiteish)
 
@@ -465,6 +513,24 @@ if  __name__ =='__main__':
     #interactive_canny(small)
     #interactive_hough_lines(small)
 
+    # show_all_plate_shaped_rectangles()
+    # show_hsv(small)
+    # low_sat = detect_low_saturation_blobs(small)
+    # cv2.imshow('Low sat', low_sat)
+    # interactive_detect_black_white_blobs(small)
+
+# ----------------------------------------------------------------
+
+
+
+
+if  __name__ =='__main__':
+    raw = cv2.imread('../images/cars/car_AC46749.jpg')
+    #raw = cv2.imread('../images/cars/car_AK62419.jpg')
+    #raw = cv2.imread('../images/cars/car_angle_BF27429.jpg')
+    small = scale_down(raw, 640, 480)
+
+ 
     #cv2.imshow('Plate candidates', draw_plate_shaped_rectangles(small))
     #rects = find_plate_shaped_rectangles(small)
     #candidate_plate_images = [transform_perspective(small, r, (500, 100)) for r in rects]
@@ -477,52 +543,11 @@ if  __name__ =='__main__':
     #    print "MATCHED th:", ocr_plate(th)
     #    print "-------------------------------"
 
+    match_plates_for_file('../images/cars/car_XJ41721.jpg')
     #match_all_plates()
+    #match_plates_for_file('../images/cars/car_AC46749.jpg')
     
-    # show_all_plate_shaped_rectangles()
-    # show_hsv(small)
-    # low_sat = detect_low_saturation_blobs(small)
-    # cv2.imshow('Low sat', low_sat)
-    # interactive_detect_black_white_blobs(small)
-
-    # nbins = [10]
-    # hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
-    # h,s,v = cv2.split(hsv)
-    
-    #histogram = cv2.calcHist([v],[0], None, nbins, [0,256])
-    #histogram = cv2.normalize(histogram, 100)
-    #show_histogram(small)
-
-    # reference = cv2.imread('/users/mjul/Downloads/1000px-DK_common_license_plate_1976.svg.png')
-    # reference = small
-    # hsv = cv2.cvtColor(reference, cv2.COLOR_BGR2HSV)
-    # h,s,v = cv2.split(hsv)
-    # ref_hist = cv2.calcHist([h],[0], None, nbins, [0,256])
-    # plt.title('HSV histograms')
-    # fig = plt.figure()
-    # for lcrt in zip((h,s,v), ['b','g','r'], (1,2,3), ('Hue', 'Saturation', 'Value')):
-    #     layer, colour, row, title = lcrt
-    #     fig.add_subplot(3,1, row)
-    #     hist = cv2.calcHist([layer], [0], None, nbins, [0 ,256])
-    #     hist = cv2.normalize(hist, 100)
-    #     plt.plot(hist)
-    # plt.show()
-    
-    #ref_hist = cv2.normalize(ref_hist, 100)
-
-    #print cv2.compareHist(histogram, ref_hist, 1)
-    #cv2.NormalizeHist(histogram, 1.0)
-    #cv2.NormalizeHist(ref_hist, 1.0)
-
-    #plt.plot(histogram, 'b')
-    #plt.plot(ref_hist, 'g')
-    #plt.xlim([0,256])
-    #plt.show()
-
-    #show_histogram(small)
-
-
     #print "Press any key..."
     #cv2.waitKey()
-    cv2.destroyAllWindows()
+    #cv2.destroyAllWindows()
 
