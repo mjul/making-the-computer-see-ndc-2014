@@ -441,6 +441,25 @@ def plate_text_image(img):
     cv2.imshow('plate_text_mask', np.ma.vstack((img, cv2.cvtColor(plate_mask, cv2.COLOR_GRAY2BGR), result)))
     return result
 
+# ----------------------------------------------------------------
+
+def plot_image_variants_and_matches(image_variants, image_matches):
+    '''Plot the variants of the image with the corresponding OCR plate matches.'''
+    plt.figure()
+    plt.subplots_adjust(wspace=0.5, hspace=0.8)
+    for img, plate, i in zip(image_variants, image_matches, xrange(len(image_variants))):
+        plt.subplot(len(image_variants), 1, i)
+        if img.ndim == 2:
+            rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        else:
+            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    plt.imshow(rgb)
+    plt.axis('off')
+    plt.title(plate if plate else "(No plate)")
+    plt.show(block=False)
+
+# ----------------------------------------------------------------
+
 def match_plates(candidate_plate_images):
     '''Returns a list of the possible matches for the plate.'''
     matches = []
@@ -456,7 +475,7 @@ def match_plates(candidate_plate_images):
         t_otsu, th_otsu = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         ret_val, th_otsu = cv2.threshold(gray, t_otsu, 255, cv2.THRESH_BINARY)
         #cv2.imshow('OTSU', th_otsu)
-        # thin the black letters
+        # thin the black parts (letters and noise)
         dilated = cv2.dilate(th_otsu, kernel=(5,5), iterations=2)
         # thicken the letters
         eroded = cv2.erode(dilated, None)
@@ -465,7 +484,9 @@ def match_plates(candidate_plate_images):
         #ptx = plate_text_image(cp)
         #cv2.imshow('ptx', ptx)
         image_variants = [cp, adaptive, th, th_otsu, dilated, eroded]
-        matches += [m for m in map(ocr_plate, image_variants) if m]
+        image_matches = [m for m in map(ocr_plate, image_variants)]
+        if False: plot_image_variants_and_matches(image_variants, image_matches)
+        matches +=  [m for m in image_matches if m]
     return matches
 
 def show_candidate_plates(candidate_plate_images):
