@@ -70,6 +70,7 @@ def show_wine_histograms(title, img):
     plt.title('Mean colour by hue')
     nbins, range_max = 20, 180
     bin_size = range_max/nbins
+    plt.xlim(0, range_max)
     n, bins, patches = plt.hist(h.flatten(), bins=nbins, range=(0,range_max), normed=True)
     cmap = mpl.cm.hsv
     b_max = float(max(bins))
@@ -87,6 +88,7 @@ def show_wine_histograms(title, img):
     plt.subplot(1, 4, 3)
     plt.title('H : Hue')
     n, bins, patches = plt.hist(h.flatten(), bins=nbins, range=(0,180), normed=True)
+    plt.xlim(0, 180)
     cmap = mpl.cm.hsv
     b_max = float(max(bins))
     for b,patch in zip(bins, patches):
@@ -98,6 +100,7 @@ def show_wine_histograms(title, img):
     plt.subplot(1, 4, 4)
     plt.title('V: Value')
     n, bins, patches = plt.hist(v.flatten(), bins=nbins, range=(0,256), normed=True)
+    plt.xlim(0, 256)
     cmap = mpl.cm.gray
     b_max = float(max(bins))
     for b,patch in zip(bins, patches):
@@ -123,14 +126,35 @@ def ocr_text(img):
         
 # ----------------------------------------------------------------
 
+def distinct_colours(img, k=8):
+    # Work in HSV colour space for k-means
+    Z_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    Z_hsv_flat = Z_hsv.reshape((-1,3))
+    Z = np.float32(Z_hsv_flat)
+
+    # define criteria, number of clusters(K) and apply kmeans()
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    ret,label,centers=cv2.kmeans(Z, k, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+
+    # Now convert back into uint8, and make original image
+    centers = np.uint8(centers)
+    result_hsv_flat = centers[label.flatten()]
+    result_hsv = result_hsv_flat.reshape((img.shape))
+    result = cv2.cvtColor(result_hsv, cv2.COLOR_HSV2BGR)
+    return result
+
+# ----------------------------------------------------------------
+
 if  __name__ =='__main__':
     dom = cv2.imread('../images/wine/dom-p-2004_375x500.tif')
     mf = cv2.imread('../images/wine/mf-pinot-2011_375x500.tif')
     
     SAVE_SCREENSHOTS = True
 
-    show_wine_histograms("Dom P", dom)
-    show_wine_histograms("MF", mf)
+    for title,img in [["Dom P", dom], ["MF", mf]]:
+        show_wine_histograms(title, img)
+        distinct = distinct_colours(img, k=12)
+        show_wine_histograms("%s distinct" % title, distinct)
         
     #print "Press any key..."
     #cv2.waitKey()
