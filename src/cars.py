@@ -184,6 +184,8 @@ def ocr_plate(img):
         result = match.group()
         # Canonicalize to no spacing
         result = result.replace(' ', '')
+    else:
+        print "No match '%s'" % text
     return result
 
 # ----------------------------------------------------------------
@@ -215,18 +217,13 @@ def match_plates(title, candidate_plate_images):
         n = n+1
         gray = cv2.cvtColor(cp, cv2.COLOR_BGR2GRAY)
         adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 15)
-        #cv2.imshow('Adaptive', adaptive)
         ret_val, th = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
-        #cv2.imshow('Thresh', th)
         t_otsu, th_otsu = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         ret_val, th_otsu = cv2.threshold(gray, t_otsu, 255, cv2.THRESH_BINARY)
-        #cv2.imshow('OTSU', th_otsu)
         # thin the black parts (letters and noise)
         dilated = cv2.dilate(th_otsu, kernel=(5,5), iterations=2)
         # thicken the letters
         eroded = cv2.erode(dilated, None)
-        #cv2.imshow('Dilated', dilated)
-        #cv2.imshow('Eroded', eroded)
         image_variants = [cp, adaptive, th, th_otsu, dilated, eroded]
         image_matches = [m for m in map(ocr_plate, image_variants)]
         if PLOT_MATCHES: plot_image_variants_and_matches("%s matches %d" % (title, n), image_variants, image_matches)
@@ -301,7 +298,7 @@ if  __name__ =='__main__':
     #match_plates_for_file('../images/cars/car_XJ41721.jpg')
     #match_all_plates()
     match_plates_for_file('../images/cars/car_AC46749.jpg')
-    match_plates_for_file('../images/cars/car_AK62419.jpg')
+    #match_plates_for_file('../images/cars/car_AK62419.jpg')
     
     print "Press any key..."
     cv2.waitKey()
