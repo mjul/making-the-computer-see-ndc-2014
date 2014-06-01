@@ -11,6 +11,8 @@ import cv2
 # Histogram and plotting
 import matplotlib.pyplot as plt
 
+import re
+
 # ----------------------------------------------------------------
 
 SAVE_SCREENSHOTS = False
@@ -41,17 +43,6 @@ def show(title, img):
     cv2.imshow(title, small)
     if SAVE_SCREENSHOTS:
         save_image(title, img)
-
-# ----------------------------------------------------------------
-
-def read_scene(fname, image_type):
-    '''Read a door scene image and crop it to the interior of the door frame.'''
-    whole_scene = cv2.imread(fname, image_type)
-    assert whole_scene != None, "Could not load %s" % fname
-    upright = cv2.flip(cv2.transpose(whole_scene), 0)
-    x,y,w,h = 610,900,3*440,4*440
-    cropped = upright[y: y + h, x: x + w]
-    return cropped
 
 # ----------------------------------------------------------------
 
@@ -163,33 +154,22 @@ def foreground_mask(scene_image, empty_scene):
     return fg_slim
     
 # ----------------------------------------------------------------
-# For a detailed description of how this works, refer to:
-# http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_feature2d/py_feature_homography/py_feature_homography.html#feature-homography
 
+def get_name(filename):
+    '''Get the interesting name part of the file name of an image.'''
+    fname = re.sub(r".*/", '', filename)
+    name = re.sub(r"\..*$", '', fname)
+    return name
 
-if  __name__ =='__main__':
-    image_type = cv2.CV_LOAD_IMAGE_GRAYSCALE
-    SAVE_SCREENSHOTS = False
-    
-    # Known object images
-    pizza_box = cv2.imread('../images/pizza/pizza_box_logo_abstract.png', image_type)
+# ----------------------------------------------------------------
 
-    # Scene images
-    empty_scene = cv2.imread('../images/pizza/empty_corridor_1.jpg', image_type)
-    pizza_delivery = cv2.imread('../images/pizza/pizza_delivery_1.jpg', image_type)
-    chocolate_delivery = cv2.imread('../images/pizza/chocolate_delivery_2.jpg', image_type)
- 
-    # Start the work
-    object_image = pizza_box
-    scene_image = pizza_delivery
-
+def detect_object(label, object_image, scene_image, empty_scene):
     fg_mask = foreground_mask(scene_image, empty_scene)
 
-    #show('Foreground mask', fg_mask)
-    #show('Object', object_image)
-    #show('Scene', scene_image)
-    #show('Scene masked', cv2.min(scene_image, fg_mask))
-
+    #show("%s Foreground mask" % label, fg_mask)
+    #show("%s Object" % label, object_image)
+    #show("%s Scene" % label, scene_image)
+    #show("%s Scene masked" % label, cv2.min(scene_image, fg_mask))
     
     # Detection and matching algorithms
 
@@ -220,8 +200,8 @@ if  __name__ =='__main__':
     obj_kp_image = draw_keypoints(to_bgr(object_image), object_keypoints)
     scene_kp_image = draw_keypoints(to_bgr(scene_image), scene_keypoints)
     
-    #show('Object Keypoints', obj_kp_image)
-    #show('Scene Keypoints', scene_kp_image)
+    #show("%s Object Keypoints" % label, obj_kp_image)
+    #show("%s Scene Keypoints" % label, scene_kp_image)
     
     # match object and scene
     print "Matching..."
@@ -234,9 +214,36 @@ if  __name__ =='__main__':
         H, status = cv2.findHomography(p1, p2, cv2.RANSAC, 5.0)
         print '%d / %d  inliers/matched' % (np.sum(status), len(status))
         match_lines_image = draw_matches(object_image, scene_image, kp_pairs, status, H)
-        show('Match lines', match_lines_image)
+        show("%s Match Lines" % label, match_lines_image)
     else:
-        print "Not enough matches are found - %d/%d" % (len(kp_pairs), MIN_MATCH_COUNT)
+        print "** Not enough matches are found - %d/%d" % (len(kp_pairs), MIN_MATCH_COUNT)
         matchesMask = None
-        
+
+# ----------------------------------------------------------------
+
+def detect_pizza(scene_file):
+    object_file = '../images/pizza/pizza_box_logo_abstract.png'
+    object_image = cv2.imread(object_file, image_type)
+    empty_scene = cv2.imread('../images/pizza/empty_corridor.jpg', image_type)
+    scene_image = cv2.imread(scene_file, image_type)
+
+    object_name = get_name(object_file)
+    scene_name = get_name(scene_file)
+    label = "%s in %s" % (object_name, scene_name)
+
+    detect_object(label, object_image, scene_image, empty_scene)
+
+    
+
+# ----------------------------------------------------------------
+
+if  __name__ =='__main__':
+    image_type = cv2.CV_LOAD_IMAGE_GRAYSCALE
+    SAVE_SCREENSHOTS = True
+    
+    detect_pizza('../images/pizza/pizza_delivery_1.jpg')
+    detect_pizza('../images/pizza/pizza_delivery_2.jpg')
+    detect_pizza('../images/pizza/pizza_delivery_3.jpg')
+
     print "Done."
+    cv2.destroyAllWindows()
