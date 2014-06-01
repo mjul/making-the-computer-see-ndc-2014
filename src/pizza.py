@@ -226,7 +226,7 @@ def detect_object(label, object_image, scene_image, empty_scene):
 # ----------------------------------------------------------------
 
 def detect_pizza(scene_file):
-    object_file = '../images/pizza/pizza_box_logo_abstract.png'
+    object_file = '../images/pizza/pizza_box_logo_abstract_640x480.png'
     object_image = cv2.imread(object_file, image_type)
     empty_scene = cv2.imread('../images/pizza/empty_corridor.jpg', image_type)
     scene_image = cv2.imread(scene_file, image_type)
@@ -237,14 +237,21 @@ def detect_pizza(scene_file):
 
     detect_object(label, object_image, scene_image, empty_scene)
 
-    
+# ----------------------------------------------------------------
+
+def abstractify_pizza_box_logo():
+    pb = cv2.imread('../images/pizza/pizza_box_logo.jpg', cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    pb = cv2.medianBlur(pb, 5)
+    pb = cv2.resize(pb, (640,480))
+    ret_val, pb = cv2.threshold(pb, 70, 255, cv2.THRESH_BINARY)
+    cv2.imwrite('../images/pizza/pizza_box_logo_abstract_640x480.png', pb)
 
 # ----------------------------------------------------------------
 
 if  __name__ =='__main__':
     image_type = cv2.CV_LOAD_IMAGE_GRAYSCALE
     SAVE_SCREENSHOTS = True
-    
+
     detect_pizza('../images/pizza/pizza_delivery_1.jpg')
     detect_pizza('../images/pizza/pizza_delivery_2.jpg')
     detect_pizza('../images/pizza/pizza_delivery_3.jpg')
@@ -252,6 +259,5 @@ if  __name__ =='__main__':
     detect_pizza('../images/pizza/chocolate_delivery_2.jpg')
     detect_pizza('../images/pizza/visitor_1.jpg')
         
-    
     print "Done."
     cv2.destroyAllWindows()
