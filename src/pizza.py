@@ -87,7 +87,10 @@ def draw_matches(img1, img2, kp_pairs, status = None, H = None):
     if H is not None:
         corners = np.float32([[0, 0], [w1, 0], [w1, h1], [0, h1]])
         corners = np.int32(cv2.perspectiveTransform(corners.reshape(1, -1, 2), H).reshape(-1, 2) + (w1, 0))
-        cv2.polylines(vis, [corners], True, (255, 0, 255), thickness=30)
+        # We consider only convex quads good matches
+        is_convex = cv2.isContourConvex(corners)
+        if is_convex:
+            cv2.polylines(vis, [corners], True, (255, 0, 255), thickness=30)
 
     if status is None:
         status = np.ones(len(kp_pairs), np.bool_)
@@ -209,6 +212,7 @@ def detect_object(label, object_image, scene_image, empty_scene):
     p1, p2, kp_pairs = filter_matches(object_keypoints, scene_keypoints, raw_matches)
 
     MIN_MATCH_COUNT = 10
+    print "KP pairs:", label, len(kp_pairs)
     
     if len(kp_pairs)>MIN_MATCH_COUNT:
         H, status = cv2.findHomography(p1, p2, cv2.RANSAC, 5.0)
@@ -245,5 +249,9 @@ if  __name__ =='__main__':
     detect_pizza('../images/pizza/pizza_delivery_2.jpg')
     detect_pizza('../images/pizza/pizza_delivery_3.jpg')
 
+    detect_pizza('../images/pizza/chocolate_delivery_2.jpg')
+    detect_pizza('../images/pizza/visitor_1.jpg')
+        
+    
     print "Done."
     cv2.destroyAllWindows()
