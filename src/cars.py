@@ -285,11 +285,12 @@ def match_plates_simple(img):
 # ----------------------------------------------------------------
 
 if  __name__ =='__main__':
-    raw = cv2.imread('../images/cars/car_AC46749.jpg')
-    raw = cv2.imread('../images/cars/car_AK62419.jpg')
+    #raw = cv2.imread('../images/cars/car_AC46749.jpg')
+    #raw = cv2.imread('../images/cars/car_AK62419.jpg')
     #raw = cv2.imread('../images/cars/car_angle_BF27429.jpg')
     #raw = cv2.imread('../images/cars/car_XJ41721.jpg')
-    small = scale_down(raw, 640, 480)
+    #raw = cv2.imread('../images/cars/car_no_plate.jpg')
+    #small = scale_down(raw, 640, 480)
 
     PLOT_MATCHES = True
     SAVE_SCREENSHOTS = True
@@ -299,6 +300,7 @@ if  __name__ =='__main__':
     #match_all_plates()
     match_plates_for_file('../images/cars/car_AC46749.jpg')
     #match_plates_for_file('../images/cars/car_AK62419.jpg')
+
     
     print "Press any key..."
     cv2.waitKey()
